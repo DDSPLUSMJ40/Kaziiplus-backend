@@ -1,0 +1,129 @@
+// Kazii+ Backend — Database Schema
+// Mirrors the account types already live in the frontend signup flow
+// (Creator / Supplier / Manufacturer), plus the product + supplier data
+// the Builder and Suppliers tab already render from hardcoded demo state.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountType {
+  CREATOR
+  SUPPLIER
+  MANUFACTURER
+}
+
+enum ProductStatus {
+  DRAFT
+  LIVE
+}
+
+enum OrderStatus {
+  PENDING
+  FULFILLED
+  SHIPPED
+}
+
+// One row per registered account, regardless of type.
+// Type-specific fields live in the linked profile table.
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  accountType  AccountType
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  creatorProfile      CreatorProfile?
+  supplierProfile      SupplierProfile?
+  manufacturerProfile  ManufacturerProfile?
+
+  @@map("users")
+}
+
+// Matches the Creator signup form: first name, brand name (optional)
+model CreatorProfile {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName      String
+  brandName      String?
+  storefrontSlug String?  @unique
+  followers      Int?     // populated once social-account connection is real, not demo data
+  createdAt      DateTime @default(now())
+
+  products Product[]
+  orders   Order[]
+
+  @@map("creator_profiles")
+}
+
+// Matches the Supplier signup form: company name, product category, country
+model SupplierProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName  String
+  category     String
+  country      String
+  moqUnits     Int?
+  leadTimeDays Int?
+  reliability  Int      @default(85) // 0-100, seeded default until real order history accrues
+  createdAt    DateTime @default(now())
+
+  @@map("supplier_profiles")
+}
+
+// Matches the Manufacturer signup form: company name, specialty, country, MOQ, lead time
+model ManufacturerProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName  String
+  specialty    String
+  country      String
+  moqUnits     Int
+  leadTimeDays Int
+  reliability  Int      @default(85)
+  createdAt    DateTime @default(now())
+
+  @@map("manufacturer_profiles")
+}
+
+// A creator's product — what the Builder currently only holds in browser state
+model Product {
+  id          String        @id @default(cuid())
+  creatorId   String
+  creator     CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  name        String
+  productType String        // tshirt, hoodie, mug, tote, poster -- matches Builder's PRODUCT_TYPES keys
+  color       String?
+  status      ProductStatus @default(DRAFT)
+  price       Decimal?      @db.Decimal(10, 2)
+  designJson  Json?         // layer data from the Builder (text/artwork placement)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  orders Order[]
+
+  @@map("products")
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  creatorId   String
+  creator     CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product     @relation(fields: [productId], references: [id])
+  customerHandle String
+  status      OrderStatus @default(PENDING)
+  amount      Decimal     @db.Decimal(10, 2)
+  createdAt   DateTime    @default(now())
+
+  @@map("orders")
+}
