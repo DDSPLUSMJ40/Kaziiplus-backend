@@ -94,6 +94,7 @@ curl testing.) A successful response returns a `user` object and a `token`.
   This is a different kind of registration than what's built here — see
   that doc for why.
 - **Frontend wiring** — the existing signup forms in the frontend repo's
-  `auth.html` currently simulate success with a toast and a redirect. They
-  need to actually call `POST /auth/signup` and store the returned token.
-  Not done yet — flag if you want that wired up next.
+  `kazii-full-demo.html` (the `screen-auth` panel) currently simulate
+  success with a toast and a redirect. They need to actually call
+  `POST /auth/signup` and store the returned token. Not done yet — flag if
+  you want that wired up next.
