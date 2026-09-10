@@ -1,8 +1,30 @@
 # Kazii+ Fulfillment Provider Integration — Technical Spec
 
 **Status:** Draft for engineering scoping
-**Scope:** Printful, Gelato, CJ Dropshipping, Alibaba
+**Scope:** Printful, Gelato, CJ Dropshipping, Alibaba, Printify, Prodigi, Supliful, Blanka
 **Not covered:** Payments, tax/customs, creator payout logic — separate specs
+
+## 0. Provider roster, by product category
+
+Kazii's own product data model already spans four categories — Skincare,
+Supplements, Apparel, Home — not just print-on-demand merch. The provider
+list below is organized around that, because "Skincare" and "Supplements"
+need private-label contract manufacturers, not print shops, and treating
+every provider as an interchangeable option obscures that.
+
+| Category | Primary | Secondary / premium tier |
+|---|---|---|
+| Apparel & general POD | Printful | Printify |
+| Wall art & premium print | Gelato | Prodigi |
+| Skincare & Supplements | Supliful | Blanka (cosmetics depth) |
+| Broad/general dropship (electronics, gadgets) | CJ Dropshipping | — |
+| Bulk custom sourcing at scale | Alibaba (ops relationship, not an API integration — see §2.4) | — |
+
+Printify and Prodigi are hedges on categories Printful/Gelato already
+cover — added for catalog depth, price competition, and provider
+redundancy, not because they unlock something new. Supliful and Blanka are
+the opposite: they're the only entries here that cover Skincare and
+Supplements at all. Section 4's phasing reflects that difference.
 
 ---
 
@@ -80,6 +102,58 @@ This is the one worth being direct about: **Alibaba's Open Platform (GGS / Globa
 
 Don't let Alibaba block shipping the other three — it's genuinely a separate workstream.
 
+### 2.5 Printify — catalog-depth hedge on Printful
+
+| | |
+|---|---|
+| **Auth** | Personal access token, Bearer auth. Self-serve, generated from account settings — no approval process. |
+| **Base URL** | `https://api.printify.com/v1/` |
+| **Catalog** | `GET /catalog/blueprints.json` → 1,300+ blueprint products, the deepest catalog in this category. `GET /catalog/blueprints/{id}/print_providers.json` → which of Printify's many underlying print facilities can produce that blueprint, each with its own variants and pricing. |
+| **Orders** | `POST /shops/{shop_id}/orders.json`. |
+| **Webhooks** | Supported for order and shipping status. |
+| **Rate limit** | Documented per-endpoint; confirm actual ceilings for the endpoints Kazii uses during onboarding rather than assuming a single global number. |
+| **Notable constraint** | Printify is an aggregator, not a single manufacturer — the same blueprint can be fulfilled by multiple independent print providers with different quality, pricing, and turnaround. That's the whole value (redundancy, price competition) but also means "the same product" isn't guaranteed identical between orders unless Kazii pins a specific print provider per listing. |
+
+**Verdict:** Doesn't unlock a new product category — Printful already covers apparel/mugs/posters/etc. Value here is catalog depth and provider redundancy on categories already in scope. Treat as a Printful hedge, not a replacement.
+
+### 2.6 Prodigi — premium wall-art tier
+
+| | |
+|---|---|
+| **Auth** | API key, Bearer/API-Key header. Self-serve signup. |
+| **Base URL** | `https://api.prodigi.com/v4.0/` |
+| **Catalog** | SKU-based product identifiers; strongest in fine-art prints, canvas, framed prints, and photo products, plus phone cases. Narrower general catalog than Printify or Printful. |
+| **Orders** | `POST /Orders`. |
+| **Webhooks** | Callback-based status updates on order/production events. |
+| **Rate limit** | Confirm during onboarding. |
+| **Notable constraint** | Positioned as museum/gallery-quality production — pricing reflects that. Not a general-purpose POD replacement, a quality upgrade for a specific slice of the catalog. |
+
+**Verdict:** Worth adding only as an optional premium tier alongside Gelato for wall art and photo products, if Kazii wants a "good / better" split for creators willing to pay more for print quality. Not a priority integration.
+
+### 2.7 Supliful — the actual gap: Skincare and Supplements
+
+| | |
+|---|---|
+| **Auth** | No self-serve API signup. A custom integration is arranged directly with Supliful's team — their own materials describe a 2–4 week custom integration timeline, separate from their Shopify-app path. |
+| **Base URL** | Not publicly documented — provided during onboarding, similar posture to Alibaba's gated registration, though for commercial reasons rather than a category mismatch. |
+| **Catalog** | 150+ white-label base products across supplements, skincare, coffee, and pet products — no MOQ, no upfront inventory. Creator supplies label/branding; Supliful manufactures and ships per order, the same operating model as print-on-demand but for formulated goods. |
+| **Manufacturing** | Supplier facilities are FDA-registered and GMP-compliant; every product carries a Certificate of Analysis. |
+| **Orders** | Order-per-sale, no inventory held by Kazii or the creator. |
+| **Notable constraint** | Skincare and supplements carry real regulatory exposure that apparel doesn't — label claims, ingredient disclosure, and FDA-adjacent compliance sit with whoever puts their brand on the product. Kazii would need creator-facing terms making clear the creator (not Kazii) is responsible for label content and marketing claims, mirroring how Supliful's own agreements are structured. |
+
+**Verdict:** Primary pick for the Skincare and Supplements categories — a single integration covers two of the four categories Kazii's own product data model already assumes exist, which neither Printful, Gelato, CJ, nor Alibaba can touch at all. Higher priority than Printify or Prodigi precisely because it closes a total gap rather than hedging an existing one.
+
+### 2.8 Blanka — deeper cosmetics option, phase 2
+
+| | |
+|---|---|
+| **Auth** | API key, but only issued after upgrading to Blanka's paid VIP plan tier — the gate is commercial, not technical. |
+| **Catalog** | Cosmetics specifically: lipstick, mascara, lip gloss, blush, eyeshadow, eyelashes, men's skincare, makeup accessories. Narrower and deeper than Supliful's skincare line. |
+| **Orders** | Programmatic product sync and order automation via API once VIP access is granted. |
+| **Notable constraint** | The VIP-plan requirement means there's a direct subscription cost to even reach API access — factor that into vendor evaluation alongside engineering time. |
+
+**Verdict:** Secondary to Supliful. Worth adding once Supliful is live and proven, for creators who want deeper makeup SKUs than Supliful's skincare line covers — not a day-one integration.
+
 ---
 
 ## 3. Backend architecture sketch
@@ -129,9 +203,12 @@ interface FulfillmentAdapter {
 ## 4. Suggested phasing
 
 1. **Printful only** — best docs, full feature coverage, good pilot. Wire up catalog, mockup generation, order creation, and webhooks end-to-end for one provider before touching the others.
-2. **Gelato** — similar shape to Printful, mainly new work is handling the four-subdomain structure and the structured `productUid` format.
-3. **CJ Dropshipping** — same adapter pattern, but budget real time for the rate-limited sync queue and token refresh job. Don't reuse Printful/Gelato's sync approach unmodified.
-4. **Alibaba** — treat as an ops/business workstream, not a phase-4 engineering sprint. Revisit once 1–3 are live and volume data suggests it's worth pursuing a formal partnership conversation.
+2. **Supliful** — not next because it's easy, but because it's the only thing in this list that closes a total gap rather than hedging an existing category. Kazii's product data already models Skincare and Supplements; right now nothing in the roster can fulfill either. Budget extra lead time up front for the custom-integration onboarding (no self-serve API signup) and for the creator-facing compliance/label-claims terms noted in §2.7 before this reaches real customers.
+3. **Gelato** — similar shape to Printful, mainly new work is handling the four-subdomain structure and the structured `productUid` format.
+4. **Printify** — same adapter interface as Printful; the new work is per-blueprint print-provider selection (§2.5), not the API shape itself. Sequenced after Gelato because it hedges a category already live, not because it's harder.
+5. **CJ Dropshipping** — same adapter pattern, but budget real time for the rate-limited sync queue and token refresh job. Don't reuse Printful/Gelato/Printify's sync approach unmodified.
+6. **Blanka and Prodigi** — optional depth additions once their respective primaries (Supliful, Gelato) are live and volume data shows creators want the deeper/premium tier. Blanka also carries a paid VIP-plan gate before API access even starts, which is a cost decision as much as an engineering one.
+7. **Alibaba** — treat as an ops/business workstream, not an engineering phase. Revisit once the above are live and volume data suggests it's worth pursuing a formal partnership conversation.
 
 ---
 
@@ -141,3 +218,5 @@ interface FulfillmentAdapter {
 - What's Printful's actual authenticated rate limit on Kazii's plan tier? The 30 req/60s figure is the *unauthenticated* ceiling.
 - Which provider fulfills a given product when a creator has multiple connected? (Needs a routing rule — e.g. explicit per-product provider assignment, not automatic selection.)
 - Webhook signature verification specifics per provider — confirm each one's method (shared secret, HMAC, etc.) before building the receiver.
+- Supliful and Blanka don't expose self-serve API docs — the actual request/response shapes, auth mechanism, and webhook support (if any) need to be confirmed directly with their teams before the `FulfillmentAdapter` interface can be assumed to fit them unmodified. The interface in §3 was designed against Printful/Gelato/CJ's print-file model; a formulated-goods adapter may need a different shape (e.g. no mockup generation, label/artwork approval as a separate step from order creation).
+- Who owns label-claims liability for Skincare/Supplements products — Kazii's terms of service, or a pass-through to Supliful/Blanka's own creator agreements? This needs a legal answer before that category goes live, not after.
