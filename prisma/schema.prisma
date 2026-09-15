@@ -29,6 +29,28 @@ enum OrderStatus {
   SHIPPED
 }
 
+// Only PRINTFUL is implemented (Phase 1 of the fulfillment integration
+// spec). Adding a provider here is step one of onboarding it -- see
+// src/fulfillment/ for the adapter that has to exist before it's usable.
+enum FulfillmentProvider {
+  PRINTFUL
+}
+
+enum ConnectionStatus {
+  ACTIVE
+  REVOKED
+  ERROR
+}
+
+enum FulfillmentOrderStatus {
+  PENDING
+  SUBMITTED
+  IN_PRODUCTION
+  SHIPPED
+  CANCELED
+  FAILED
+}
+
 // One row per registered account, regardless of type.
 // Type-specific fields live in the linked profile table.
 model User {
@@ -59,6 +81,7 @@ model CreatorProfile {
 
   products Product[]
   orders   Order[]
+  supplierConnections SupplierConnection[]
 
   @@map("creator_profiles")
 }
@@ -109,7 +132,8 @@ model Product {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  orders Order[]
+  orders         Order[]
+  syncedProducts SyncedProduct[]
 
   @@map("products")
 }
@@ -125,5 +149,69 @@ model Order {
   amount      Decimal     @db.Decimal(10, 2)
   createdAt   DateTime    @default(now())
 
+  fulfillmentOrders FulfillmentOrder[]
+
   @@map("orders")
+}
+
+// Per fulfillment-integration-spec.md section 3's suggested tables --
+// a creator's credentials for one provider. Tokens are encrypted at the
+// application layer (src/lib/crypto.ts) before they ever reach this
+// column; see that file's header for what "encrypted at rest" actually
+// means here versus the KMS/Vault setup the spec describes as the
+// longer-term target.
+model SupplierConnection {
+  id                    String              @id @default(cuid())
+  creatorId             String
+  creator               CreatorProfile      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  provider              FulfillmentProvider
+  encryptedAccessToken  String
+  encryptedRefreshToken String?
+  expiresAt             DateTime?
+  connectedAt           DateTime            @default(now())
+  status                ConnectionStatus    @default(ACTIVE)
+
+  syncedProducts    SyncedProduct[]
+  fulfillmentOrders FulfillmentOrder[]
+
+  @@unique([creatorId, provider])
+  @@map("supplier_connections")
+}
+
+// Caches a provider's catalog entry against the Kazii product it's
+// linked to, if any -- lets the Builder show "already connected to
+// Printful" without a live API call on every page load.
+model SyncedProduct {
+  id                String             @id @default(cuid())
+  connectionId      String
+  connection        SupplierConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  provider          FulfillmentProvider
+  externalProductId String
+  kaziiProductId    String?
+  product           Product?           @relation(fields: [kaziiProductId], references: [id])
+  cachedCatalogJson Json?
+  lastSyncedAt      DateTime           @default(now())
+
+  @@unique([connectionId, externalProductId])
+  @@map("synced_products")
+}
+
+// One row per attempt to fulfill a Kazii order through a connected
+// provider. providerOrderId is null until the provider's create-order
+// call succeeds; status is updated by both the polling fallback and the
+// webhook receiver, whichever reaches it first.
+model FulfillmentOrder {
+  id              String                 @id @default(cuid())
+  kaziiOrderId    String
+  order           Order                  @relation(fields: [kaziiOrderId], references: [id])
+  connectionId    String
+  connection      SupplierConnection     @relation(fields: [connectionId], references: [id])
+  provider        FulfillmentProvider
+  providerOrderId String?
+  status          FulfillmentOrderStatus @default(PENDING)
+  lastWebhookAt   DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@map("fulfillment_orders")
 }
