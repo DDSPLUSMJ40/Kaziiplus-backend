@@ -26,11 +26,7 @@ function mockRes() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-
-  // Re-setup mocks after clearAllMocks
-  mockPrisma.user.findUnique = vi.fn();
-  mockPrisma.user.create = vi.fn();
-  mockPrisma.creatorProfile.findUnique = vi.fn();
+  process.env.JWT_SECRET = 'test-secret';
 });
 
 describe('generateUniqueStorefrontSlug', () => {
