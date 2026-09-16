@@ -3,21 +3,22 @@ import type { Request, Response } from 'express';
 
 process.env.JWT_SECRET = 'test-secret';
 
-vi.mock('../lib/prisma', () => {
-  const createMockPrisma = () => ({
-    user: { findUnique: vi.fn(), create: vi.fn() },
-    creatorProfile: { findUnique: vi.fn() },
-  });
-  return { prisma: createMockPrisma() };
+const { mockPrisma } = vi.hoisted(() => {
+  return {
+    mockPrisma: {
+      user: { findUnique: vi.fn(), create: vi.fn() },
+      creatorProfile: { findUnique: vi.fn() },
+    },
+  };
 });
 
+vi.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
 vi.mock('bcryptjs', () => ({
   default: {
     hash: vi.fn().mockResolvedValue('hashed'),
     compare: vi.fn(),
   },
 }));
-
 vi.mock('jsonwebtoken', () => ({
   default: {
     sign: vi.fn().mockReturnValue('signed-token'),
@@ -25,13 +26,6 @@ vi.mock('jsonwebtoken', () => ({
 }));
 
 import { signup, generateUniqueStorefrontSlug } from './auth.controller';
-import { prisma } from '../lib/prisma';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-
-const mockPrisma = prisma as any;
-const mockBcrypt = bcrypt as any;
-const mockJwt = jwt as any;
 
 function mockRes() {
   const res: Partial<Response> = {};
@@ -43,10 +37,10 @@ function mockRes() {
 beforeEach(() => {
   vi.clearAllMocks();
 
-  // Re-initialize the mocks
-  mockBcrypt.hash = vi.fn().mockResolvedValue('hashed');
-  mockBcrypt.compare = vi.fn();
-  mockJwt.sign = vi.fn().mockReturnValue('signed-token');
+  // Re-setup mocks after clearAllMocks
+  mockPrisma.user.findUnique = vi.fn();
+  mockPrisma.user.create = vi.fn();
+  mockPrisma.creatorProfile.findUnique = vi.fn();
 });
 
 describe('generateUniqueStorefrontSlug', () => {
@@ -73,9 +67,6 @@ describe('generateUniqueStorefrontSlug', () => {
 
 describe('signup assigns a storefront slug to new creators', () => {
   it('creates the user with a generated storefrontSlug on the creator profile', async () => {
-    // Mock jwt.sign to not require JWT_SECRET validation
-    mockJwt.sign = vi.fn().mockReturnValue('signed-token');
-
     mockPrisma.user.findUnique.mockResolvedValue(null);
     mockPrisma.creatorProfile.findUnique.mockResolvedValue(null);
     mockPrisma.user.create.mockResolvedValue({ id: 'u1', email: 'jade@example.com', accountType: 'CREATOR' });
