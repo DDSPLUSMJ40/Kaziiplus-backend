@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { signupSchema, loginSchema } from '../schemas/auth.schemas';
+import { slugify } from '../lib/slugify';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRY = '7d';
@@ -14,6 +15,18 @@ function signToken(userId: string, accountType: string) {
     throw new Error('JWT_SECRET is not set. Refusing to issue a token.');
   }
   return jwt.sign({ sub: userId, accountType }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+}
+
+export async function generateUniqueStorefrontSlug(base: string): Promise<string> {
+  const baseSlug = slugify(base) || 'creator';
+  let candidate = baseSlug;
+  let attempt = 0;
+  while (await prisma.creatorProfile.findUnique({ where: { storefrontSlug: candidate } })) {
+    attempt += 1;
+    candidate = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
+    if (attempt > 5) break; // astronomically unlikely to loop this long; don't hang the request
+  }
+  return candidate;
 }
 
 export async function signup(req: Request, res: Response) {
@@ -30,6 +43,9 @@ export async function signup(req: Request, res: Response) {
 
   const passwordHash = await bcrypt.hash(data.password, 12);
 
+  const storefrontSlug =
+    data.accountType === 'CREATOR' ? await generateUniqueStorefrontSlug(data.brandName || data.firstName) : undefined;
+
   const user = await prisma.user.create({
     data: {
       email: data.email,
@@ -37,7 +53,7 @@ export async function signup(req: Request, res: Response) {
       accountType: data.accountType,
       ...(data.accountType === 'CREATOR' && {
         creatorProfile: {
-          create: { firstName: data.firstName, brandName: data.brandName ?? null },
+          create: { firstName: data.firstName, brandName: data.brandName ?? null, storefrontSlug },
         },
       }),
       ...(data.accountType === 'SUPPLIER' && {
