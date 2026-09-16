@@ -3,27 +3,17 @@ import type { Request, Response } from 'express';
 
 process.env.JWT_SECRET = 'test-secret';
 
-const { mockPrisma } = vi.hoisted(() => {
-  return {
-    mockPrisma: {
-      user: { findUnique: vi.fn(), create: vi.fn() },
-      creatorProfile: { findUnique: vi.fn() },
-    },
-  };
-});
+var mockPrisma: any;
 
-vi.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
-vi.mock('bcryptjs', () => ({
-  default: {
-    hash: vi.fn().mockResolvedValue('hashed'),
-    compare: vi.fn(),
-  },
-}));
-vi.mock('jsonwebtoken', () => ({
-  default: {
-    sign: vi.fn().mockReturnValue('signed-token'),
-  },
-}));
+vi.mock('../lib/prisma', () => {
+  mockPrisma = {
+    user: { findUnique: vi.fn(), create: vi.fn() },
+    creatorProfile: { findUnique: vi.fn() },
+  };
+  return { prisma: mockPrisma };
+});
+vi.mock('bcryptjs', () => ({ default: { hash: vi.fn().mockResolvedValue('hashed'), compare: vi.fn() } }));
+vi.mock('jsonwebtoken', () => ({ default: { sign: vi.fn().mockReturnValue('signed-token') } }));
 
 import { signup, generateUniqueStorefrontSlug } from './auth.controller';
 
