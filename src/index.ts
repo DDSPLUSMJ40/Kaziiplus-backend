@@ -5,6 +5,7 @@ import authRoutes from './routes/auth.routes';
 import productsRoutes from './routes/products.routes';
 import storefrontRoutes from './routes/storefront.routes';
 import webhooksRoutes from './routes/webhooks.routes';
+import { errorHandler } from './middleware/error.middleware';
 
 dotenv.config();
 
@@ -21,6 +22,12 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/auth', authRoutes);
 app.use('/products', productsRoutes);
 app.use('/', storefrontRoutes);
+
+// Catch-all error handler -- must be the LAST app.use() call, after every
+// route, so any error forwarded via next(err) (including async rejections
+// from routes wrapped with asyncHandler) gets a clean 500 instead of
+// crashing the process or falling through to Express's default handler.
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

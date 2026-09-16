@@ -15,7 +15,7 @@ export async function createCheckoutSession(req: Request, res: Response) {
   const product = await prisma.product.findFirst({
     where: { id: parsed.data.productId, creatorId: creator.id, status: 'LIVE' },
   });
-  if (!product || !product.price) {
+  if (!product || product.price == null || Number(product.price) <= 0) {
     return res.status(404).json({ error: 'not_found' });
   }
 

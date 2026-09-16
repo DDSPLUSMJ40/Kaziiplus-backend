@@ -59,6 +59,30 @@ describe('createCheckoutSession', () => {
     expect(res.status).toHaveBeenCalledWith(404);
   });
 
+  it('returns 404 when the product price is exactly zero', async () => {
+    mockPrisma.creatorProfile.findUnique.mockResolvedValue({ id: 'c1' });
+    mockPrisma.product.findFirst.mockResolvedValue({ id: 'p1', name: 'Free Sticker', price: '0.00' });
+    const req = {
+      params: { slug: 'elena' },
+      body: { productId: 'p1', customerEmail: 'buyer@example.com' },
+    } as unknown as Request;
+    const res = mockRes();
+    await createCheckoutSession(req, res);
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(mockStripeClient.checkout.sessions.create).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when quantity exceeds the cap', async () => {
+    const req = {
+      params: { slug: 'elena' },
+      body: { productId: 'p1', customerEmail: 'buyer@example.com', quantity: 1000000 },
+    } as unknown as Request;
+    const res = mockRes();
+    await createCheckoutSession(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(mockStripeClient.checkout.sessions.create).not.toHaveBeenCalled();
+  });
+
   it('creates a Stripe session and a PENDING order, returning the checkout URL', async () => {
     mockPrisma.creatorProfile.findUnique.mockResolvedValue({ id: 'c1' });
     mockPrisma.product.findFirst.mockResolvedValue({ id: 'p1', name: 'Tee', price: '20.00' });
