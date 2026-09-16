@@ -29,6 +29,13 @@ enum OrderStatus {
   SHIPPED
 }
 
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
 // Only PRINTFUL is implemented (Phase 1 of the fulfillment integration
 // spec). Adding a provider here is step one of onboarding it -- see
 // src/fulfillment/ for the adapter that has to exist before it's usable.
@@ -76,6 +83,7 @@ model CreatorProfile {
   firstName      String
   brandName      String?
   storefrontSlug String?  @unique
+  storefrontLive Boolean  @default(true)
   followers      Int?     // populated once social-account connection is real, not demo data
   createdAt      DateTime @default(now())
 
@@ -147,6 +155,10 @@ model Order {
   customerHandle String
   status      OrderStatus @default(PENDING)
   amount      Decimal     @db.Decimal(10, 2)
+  paymentStatus   PaymentStatus @default(PENDING)
+  stripeSessionId String?       @unique
+  quantity        Int           @default(1)
+  customerEmail   String?
   createdAt   DateTime    @default(now())
 
   fulfillmentOrders FulfillmentOrder[]
