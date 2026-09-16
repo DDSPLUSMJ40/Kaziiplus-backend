@@ -128,10 +128,10 @@ Create `src/controllers/auth.controller.test.ts`:
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Request, Response } from 'express';
 
-const mockPrisma = {
+const mockPrisma = vi.hoisted(() => ({
   user: { findUnique: vi.fn(), create: vi.fn() },
   creatorProfile: { findUnique: vi.fn() },
-};
+}));
 
 vi.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
 vi.mock('bcryptjs', () => ({ default: { hash: vi.fn().mockResolvedValue('hashed'), compare: vi.fn() } }));
@@ -375,10 +375,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Response } from 'express';
 import type { AuthedRequest } from '../middleware/auth.middleware';
 
-const mockPrisma = {
+const mockPrisma = vi.hoisted(() => ({
   creatorProfile: { findUnique: vi.fn() },
   product: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
-};
+}));
 
 vi.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
 
@@ -664,10 +664,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Response, Request } from 'express';
 import type { AuthedRequest } from '../middleware/auth.middleware';
 
-const mockPrisma = {
+const mockPrisma = vi.hoisted(() => ({
   creatorProfile: { findUnique: vi.fn(), update: vi.fn() },
   order: { findMany: vi.fn() },
-};
+}));
 
 vi.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
 
@@ -925,15 +925,15 @@ Create `src/controllers/checkout.controller.test.ts`:
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Request, Response } from 'express';
 
-const mockPrisma = {
+const mockPrisma = vi.hoisted(() => ({
   creatorProfile: { findUnique: vi.fn() },
   product: { findFirst: vi.fn() },
   order: { create: vi.fn() },
-};
+}));
 
-const mockStripeClient = {
+const mockStripeClient = vi.hoisted(() => ({
   checkout: { sessions: { create: vi.fn() } },
-};
+}));
 
 vi.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
 vi.mock('../lib/stripe', () => ({ getStripe: () => mockStripeClient }));
@@ -1026,13 +1026,13 @@ Create `src/routes/webhooks.routes.test.ts`:
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Request, Response } from 'express';
 
-const mockPrisma = {
+const mockPrisma = vi.hoisted(() => ({
   order: { updateMany: vi.fn() },
-};
+}));
 
-const mockStripeClient = {
+const mockStripeClient = vi.hoisted(() => ({
   webhooks: { constructEvent: vi.fn() },
-};
+}));
 
 vi.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
 vi.mock('../lib/stripe', () => ({ getStripe: () => mockStripeClient }));
