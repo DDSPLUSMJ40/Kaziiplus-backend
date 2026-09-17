@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import Stripe from 'stripe';
 import { prisma } from '../lib/prisma';
 import { getStripe } from '../lib/stripe';
 import { checkoutSchema } from '../schemas/checkout.schemas';
@@ -33,11 +34,9 @@ export async function createCheckoutSession(req: Request, res: Response) {
       {
         price_data: {
           currency: 'usd',
-          // Managed Payments (on by default on this Stripe account) rejects a
-          // line item with no product tax code. txcd_99999999 is Stripe's
-          // generic tangible-goods code -- fine for physical merch until
-          // per-category tax codes matter (e.g. Supliful/Blanka's supplements
-          // and skincare products, once those categories exist).
+          // txcd_99999999 is Stripe Tax's generic tangible-goods code --
+          // correct categorization for physical merch if Stripe Tax is ever
+          // enabled, independent of the Managed Payments opt-out below.
           product_data: { name: product.name, tax_code: 'txcd_99999999' },
           unit_amount: Math.round(unitPrice * 100),
         },
@@ -47,7 +46,13 @@ export async function createCheckoutSession(req: Request, res: Response) {
     customer_email: parsed.data.customerEmail,
     success_url: `${frontendUrl}/store/${req.params.slug}?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${frontendUrl}/store/${req.params.slug}`,
-  });
+    // Managed Payments (on by default on this Stripe account) only supports
+    // digital goods -- Stripe's own eligibility docs list physical goods as
+    // explicitly unsupported. Kazii sells physical merch, so it must be
+    // disabled per session. Not yet in the installed SDK's TS types
+    // (stripe@22.6.2), hence the cast.
+    managed_payments: { enabled: false },
+  } as Stripe.Checkout.SessionCreateParams);
 
   await prisma.order.create({
     data: {
