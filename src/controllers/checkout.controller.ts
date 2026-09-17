@@ -33,7 +33,12 @@ export async function createCheckoutSession(req: Request, res: Response) {
       {
         price_data: {
           currency: 'usd',
-          product_data: { name: product.name },
+          // Managed Payments (on by default on this Stripe account) rejects a
+          // line item with no product tax code. txcd_99999999 is Stripe's
+          // generic tangible-goods code -- fine for physical merch until
+          // per-category tax codes matter (e.g. Supliful/Blanka's supplements
+          // and skincare products, once those categories exist).
+          product_data: { name: product.name, tax_code: 'txcd_99999999' },
           unit_amount: Math.round(unitPrice * 100),
         },
         quantity: parsed.data.quantity,
