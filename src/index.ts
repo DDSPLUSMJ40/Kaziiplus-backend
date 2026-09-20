@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
 import productsRoutes from './routes/products.routes';
+import fulfillmentRoutes from './routes/fulfillment.routes';
 import storefrontRoutes from './routes/storefront.routes';
 import webhooksRoutes from './routes/webhooks.routes';
 import { errorHandler } from './middleware/error.middleware';
@@ -21,6 +22,7 @@ app.use(express.json());
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/auth', authRoutes);
 app.use('/products', productsRoutes);
+app.use('/fulfillment', fulfillmentRoutes);
 app.use('/', storefrontRoutes);
 
 // Catch-all error handler -- must be the LAST app.use() call, after every
