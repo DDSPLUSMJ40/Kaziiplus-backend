@@ -44,6 +44,9 @@ export async function createCheckoutSession(req: Request, res: Response) {
       },
     ],
     customer_email: parsed.data.customerEmail,
+    // Required for Printful order creation, not optional metadata -- US
+    // only for now, matching Printful's primary market; widen later.
+    shipping_address_collection: { allowed_countries: ['US'] },
     success_url: `${frontendUrl}/store/${req.params.slug}?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${frontendUrl}/store/${req.params.slug}`,
     // Managed Payments (on by default on this Stripe account) only supports

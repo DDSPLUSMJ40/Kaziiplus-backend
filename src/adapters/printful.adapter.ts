@@ -43,3 +43,34 @@ export async function getVariant(token: string, variantId: number) {
   const data = await printfulRequest(token, `/products/variant/${variantId}`);
   return data.result;
 }
+
+export interface PrintfulRecipient {
+  name: string;
+  address1: string;
+  address2?: string;
+  city: string;
+  state_code?: string;
+  country_code: string;
+  zip: string;
+  email?: string;
+}
+
+export interface PrintfulOrderItem {
+  variant_id: number;
+  quantity: number;
+  files: { url: string }[];
+}
+
+// Two real API calls, not one -- Printful's Orders API always creates a
+// draft first; there is no documented single-call create+confirm parameter,
+// and guessing at one on an endpoint that spends real money and ships real
+// goods isn't worth it. If confirm fails, the draft still exists in
+// Printful for manual follow-up; this doesn't retry it automatically.
+export async function createOrder(token: string, recipient: PrintfulRecipient, items: PrintfulOrderItem[]) {
+  const draft = await printfulRequest(token, '/orders', {
+    method: 'POST',
+    body: JSON.stringify({ recipient, items, shipping: 'STANDARD' }),
+  });
+  const confirmed = await printfulRequest(token, `/orders/${draft.result.id}/confirm`, { method: 'POST' });
+  return confirmed.result;
+}

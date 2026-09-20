@@ -166,6 +166,9 @@ model Order {
   stripeSessionId String?       @unique
   quantity        Int           @default(1)
   customerEmail   String?
+  shippingAddress Json?         // {name, address1, address2?, city, stateCode, countryCode, zip}
+                                 // captured from Stripe Checkout's shipping collection --
+                                 // required to create a Printful order, not optional metadata.
   createdAt   DateTime    @default(now())
 
   fulfillmentOrders FulfillmentOrder[]
