@@ -9,6 +9,11 @@ export const createProductSchema = z.object({
   // Base64-encoded PNG/JPEG, no data: prefix -- the Builder's uploaded
   // artwork layer, sent verbatim as the product's print file.
   printFileBase64: z.string().optional(),
+  // Lets the Builder's Publish button go straight to LIVE on a
+  // brand-new product (Publish clicked before any prior Save) --
+  // without this, Zod silently strips an unrecognized status field
+  // and the product ends up DRAFT despite reporting success.
+  status: z.enum(['DRAFT', 'LIVE']).optional(),
 });
 
 export const updateProductSchema = z.object({
