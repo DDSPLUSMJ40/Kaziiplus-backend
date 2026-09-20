@@ -77,7 +77,10 @@ export async function signup(req: Request, res: Response) {
   });
 
   const token = signToken(user.id, user.accountType);
-  return res.status(201).json({ user, token });
+  return res.status(201).json({
+    user: { ...user, ...(data.accountType === 'CREATOR' && { storefrontSlug }) },
+    token,
+  });
 }
 
 export async function login(req: Request, res: Response) {
@@ -96,6 +99,19 @@ export async function login(req: Request, res: Response) {
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) return res.status(401).json(invalidMsg);
 
+  const creatorProfile =
+    user.accountType === 'CREATOR'
+      ? await prisma.creatorProfile.findUnique({ where: { userId: user.id }, select: { storefrontSlug: true } })
+      : null;
+
   const token = signToken(user.id, user.accountType);
-  return res.json({ user: { id: user.id, email: user.email, accountType: user.accountType }, token });
+  return res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      accountType: user.accountType,
+      ...(creatorProfile && { storefrontSlug: creatorProfile.storefrontSlug }),
+    },
+    token,
+  });
 }
