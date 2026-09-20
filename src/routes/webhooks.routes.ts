@@ -67,13 +67,18 @@ async function attemptPrintfulFulfillment(orderId: string) {
         files: [{ url: `${BACKEND_PUBLIC_URL}/products/${order.product.id}/print-file.png` }],
       },
     ]);
+    // Printful's confirm call returns HTTP 200 even when the order itself
+    // couldn't be confirmed (e.g. no payment method on the account) --
+    // the failure shows up as result.status, not the HTTP status. Caught by
+    // live testing: a real confirm attempt came back 200 with status
+    // "failed" and was silently recorded as SUBMITTED before this check.
     await prisma.fulfillmentOrder.create({
       data: {
         kaziiOrderId: order.id,
         connectionId: connection.id,
         provider: 'PRINTFUL',
         providerOrderId: String(printfulOrder.id),
-        status: 'SUBMITTED',
+        status: printfulOrder.status === 'failed' ? 'FAILED' : 'SUBMITTED',
       },
     });
   } catch {

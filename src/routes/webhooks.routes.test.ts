@@ -142,6 +142,29 @@ describe('handleStripeWebhook', () => {
     });
   });
 
+  it('records FAILED (not SUBMITTED) when Printful confirms with HTTP 200 but result.status is failed', async () => {
+    mockStripeClient.webhooks.constructEvent.mockReturnValue({ type: 'checkout.session.completed', data: { object: shippingSession } });
+    mockPrisma.order.findUnique
+      .mockResolvedValueOnce({ id: 'o1', stripeSessionId: 'cs_123' })
+      .mockResolvedValueOnce({
+        id: 'o1',
+        shippingAddress: { name: 'Jade Buyer', address1: '123 Main St', city: 'Austin', countryCode: 'US', zip: '78701' },
+        quantity: 1,
+        customerEmail: 'buyer@example.com',
+        product: { id: 'p1', printfulVariantId: 4011 },
+        creator: { supplierConnections: [{ id: 'conn1', provider: 'PRINTFUL', status: 'ACTIVE', encryptedAccessToken: 'enc-token' }] },
+      });
+    mockCreateOrder.mockResolvedValue({ id: 999, status: 'failed', error: 'No payment method added' });
+
+    const req = { headers: { 'stripe-signature': 'sig' }, body: Buffer.from('{}') } as unknown as Request;
+    const res = mockRes();
+    await handleStripeWebhook(req, res);
+
+    expect(mockPrisma.fulfillmentOrder.create).toHaveBeenCalledWith({
+      data: { kaziiOrderId: 'o1', connectionId: 'conn1', provider: 'PRINTFUL', providerOrderId: '999', status: 'FAILED' },
+    });
+  });
+
   it('records a FAILED fulfillment order if the Printful call throws', async () => {
     mockStripeClient.webhooks.constructEvent.mockReturnValue({ type: 'checkout.session.completed', data: { object: shippingSession } });
     mockPrisma.order.findUnique
