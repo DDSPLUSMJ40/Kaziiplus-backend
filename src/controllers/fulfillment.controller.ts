@@ -52,6 +52,16 @@ export async function disconnectPrintful(req: AuthedRequest, res: Response) {
   return res.status(204).send();
 }
 
+// Cheap, DB-only check -- no external Printful call. Meant for UI that just
+// needs to know connected y/n (e.g. an Overview stat), not the full catalog.
+export async function getPrintfulStatus(req: AuthedRequest, res: Response) {
+  const creatorId = await getCreatorProfileId(req.userId!);
+  if (!creatorId) return res.status(404).json({ error: 'not_found' });
+
+  const connection = await getActiveConnection(creatorId);
+  return res.json({ connected: !!connection && connection.status === 'ACTIVE' });
+}
+
 export async function getPrintfulCatalog(req: AuthedRequest, res: Response) {
   const creatorId = await getCreatorProfileId(req.userId!);
   if (!creatorId) return res.status(404).json({ error: 'not_found' });
