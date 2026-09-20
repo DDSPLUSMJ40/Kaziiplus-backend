@@ -60,7 +60,7 @@ describe('listProducts', () => {
     const res = mockRes();
     await listProducts(req, res);
     expect(mockPrisma.product.findMany).toHaveBeenCalledWith({ where: { creatorId: 'c1' }, orderBy: { createdAt: 'desc' } });
-    expect(res.json).toHaveBeenCalledWith({ products: [{ id: 'p1' }] });
+    expect(res.json).toHaveBeenCalledWith({ products: [{ id: 'p1', hasPrintFile: false }] });
   });
 });
 
@@ -80,7 +80,7 @@ describe('getProduct', () => {
     const req = { params: { id: 'p1' }, userId: 'u1' } as unknown as AuthedRequest;
     const res = mockRes();
     await getProduct(req, res);
-    expect(res.json).toHaveBeenCalledWith({ product: { id: 'p1', creatorId: 'c1' } });
+    expect(res.json).toHaveBeenCalledWith({ product: { id: 'p1', creatorId: 'c1', hasPrintFile: false } });
   });
 });
 

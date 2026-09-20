@@ -6,6 +6,9 @@ export const createProductSchema = z.object({
   color: z.string().optional(),
   price: z.coerce.number().positive().optional(),
   designJson: z.any().optional(),
+  // Base64-encoded PNG/JPEG, no data: prefix -- the Builder's uploaded
+  // artwork layer, sent verbatim as the product's print file.
+  printFileBase64: z.string().optional(),
 });
 
 export const updateProductSchema = z.object({
@@ -15,4 +18,5 @@ export const updateProductSchema = z.object({
   price: z.coerce.number().positive().optional(),
   designJson: z.any().optional(),
   status: z.enum(['DRAFT', 'LIVE']).optional(),
+  printFileBase64: z.string().optional(),
 });

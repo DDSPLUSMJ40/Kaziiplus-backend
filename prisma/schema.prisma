@@ -137,6 +137,10 @@ model Product {
   status      ProductStatus @default(DRAFT)
   price       Decimal?      @db.Decimal(10, 2)
   designJson  Json?         // layer data from the Builder (text/artwork placement)
+  printFileData Bytes?      // the Builder's uploaded artwork layer, verbatim -- what
+                             // fulfillment providers fetch via GET /products/:id/print-file.png.
+                             // No compositing yet: first uploaded image layer wins, text
+                             // layers aren't rendered in. Real canvas export is future work.
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
