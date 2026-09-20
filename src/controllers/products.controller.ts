@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthedRequest } from '../middleware/auth.middleware';
 import { createProductSchema, updateProductSchema } from '../schemas/products.schemas';
+import { decrypt } from '../lib/crypto';
+import { getVariant } from '../adapters/printful.adapter';
 
 async function getCreatorProfileId(userId: string): Promise<string | null> {
   const profile = await prisma.creatorProfile.findUnique({ where: { userId }, select: { id: true } });
@@ -63,6 +65,20 @@ export async function updateProduct(req: AuthedRequest, res: Response) {
 
   const existing = await prisma.product.findFirst({ where: { id: req.params.id, creatorId } });
   if (!existing) return res.status(404).json({ error: 'not_found' });
+
+  if (parsed.data.printfulVariantId != null) {
+    const connection = await prisma.supplierConnection.findUnique({
+      where: { creatorId_provider: { creatorId, provider: 'PRINTFUL' } },
+    });
+    if (!connection || connection.status !== 'ACTIVE') {
+      return res.status(400).json({ error: 'printful_not_connected' });
+    }
+    try {
+      await getVariant(decrypt(connection.encryptedAccessToken), parsed.data.printfulVariantId);
+    } catch {
+      return res.status(400).json({ error: 'invalid_printful_variant' });
+    }
+  }
 
   const product = await prisma.product.update({ where: { id: existing.id }, data: toPrismaData(parsed.data) });
   return res.json({ product: serializeProduct(product) });

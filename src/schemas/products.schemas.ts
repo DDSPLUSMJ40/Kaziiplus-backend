@@ -24,4 +24,5 @@ export const updateProductSchema = z.object({
   designJson: z.any().optional(),
   status: z.enum(['DRAFT', 'LIVE']).optional(),
   printFileBase64: z.string().optional(),
+  printfulVariantId: z.coerce.number().int().positive().optional(),
 });

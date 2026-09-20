@@ -36,3 +36,10 @@ export async function getCatalogProduct(token: string, productId: string) {
   const data = await printfulRequest(token, `/products/${productId}`);
   return data.result;
 }
+
+// Used to validate a printfulVariantId before it's saved on a Product --
+// throws (via printfulRequest's !res.ok check) if the variant doesn't exist.
+export async function getVariant(token: string, variantId: number) {
+  const data = await printfulRequest(token, `/products/variant/${variantId}`);
+  return data.result;
+}
