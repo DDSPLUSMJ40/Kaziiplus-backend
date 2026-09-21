@@ -35,7 +35,8 @@ describe('generateImage', () => {
     expect(Array.from(result)).toEqual([1, 2, 3]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[0][0]).toContain('flux-schnell');
-    expect(fetchMock.mock.calls[1][0]).toContain('background-remover');
+    expect(fetchMock.mock.calls[1][0]).toBe('https://api.replicate.com/v1/predictions');
+    expect(fetchMock.mock.calls[1][1].body).toContain('95fcc2a26d3899cd6c2691c900465aaeff466285a65c14638cc5f36f34befaf1');
     expect(fetchMock.mock.calls[1][1].body).toContain('https://replicate.delivery/generated.png');
     expect(fetchMock.mock.calls[2][0]).toBe('https://replicate.delivery/stripped.png');
   });
