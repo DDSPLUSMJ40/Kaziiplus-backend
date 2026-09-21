@@ -6,6 +6,14 @@ const REPLICATE_BASE_URL = 'https://api.replicate.com/v1';
 // official/partner models like black-forest-labs/flux-schnell.
 const BACKGROUND_REMOVER_VERSION = '95fcc2a26d3899cd6c2691c900465aaeff466285a65c14638cc5f36f34befaf1';
 
+// Prefer: wait itself only holds the connection open for ~60s. On a
+// low-traffic account, Replicate's queueing/cold-start time can exceed
+// that, so a "processing" response after the initial wait isn't a
+// failure -- we poll the prediction until it finishes or this deadline
+// passes, matched to what real cold starts were observed to need.
+const POLL_INTERVAL_MS = 3000;
+const MAX_WAIT_MS = 3 * 60 * 1000;
+
 export class ReplicateError extends Error {}
 
 function getToken(): string {
@@ -16,9 +24,45 @@ function getToken(): string {
   return token;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function pollUntilTerminal(getUrl: string, deadline: number): Promise<any> {
+  while (Date.now() < deadline) {
+    await sleep(POLL_INTERVAL_MS);
+    const res = await fetch(getUrl, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!res.ok) {
+      throw new ReplicateError(`Replicate API error polling prediction: ${res.status}`);
+    }
+    const data = await res.json() as any;
+    if (data.status === 'succeeded') return data;
+    if (data.status === 'failed' || data.status === 'canceled') {
+      throw new ReplicateError(`Replicate prediction did not succeed: ${data.status}`);
+    }
+    // still starting/processing -- keep polling until the deadline
+  }
+  throw new ReplicateError('Replicate prediction timed out waiting for a result');
+}
+
+async function handleInitialResponse(res: Response, label: string): Promise<any> {
+  if (!res.ok) {
+    throw new ReplicateError(`Replicate API error calling ${label}: ${res.status}`);
+  }
+  const data = await res.json() as any;
+  if (data.status === 'succeeded') return data;
+  if (data.status === 'failed' || data.status === 'canceled') {
+    throw new ReplicateError(`Replicate prediction for ${label} did not succeed: ${data.status}`);
+  }
+  return pollUntilTerminal(data.urls.get, Date.now() + MAX_WAIT_MS);
+}
+
 // Prefer: wait makes Replicate hold the HTTP response open until the
-// prediction finishes (bounded by the model's own timeout) instead of
-// returning immediately with a "starting" status that would need polling.
+// prediction finishes or its own internal wait budget (~60s) runs out,
+// whichever comes first -- handleInitialResponse takes over with polling
+// if it comes back still "processing".
 async function runModel(model: string, input: Record<string, unknown>): Promise<any> {
   const res = await fetch(`${REPLICATE_BASE_URL}/models/${model}/predictions`, {
     method: 'POST',
@@ -29,14 +73,7 @@ async function runModel(model: string, input: Record<string, unknown>): Promise<
     },
     body: JSON.stringify({ input }),
   });
-  if (!res.ok) {
-    throw new ReplicateError(`Replicate API error calling ${model}: ${res.status}`);
-  }
-  const data = await res.json() as any;
-  if (data.status !== 'succeeded') {
-    throw new ReplicateError(`Replicate prediction for ${model} did not succeed: ${data.status}`);
-  }
-  return data;
+  return handleInitialResponse(res, model);
 }
 
 // Same behavior as runModel, but for a community model pinned to a
@@ -51,14 +88,7 @@ async function runVersion(version: string, input: Record<string, unknown>): Prom
     },
     body: JSON.stringify({ version, input }),
   });
-  if (!res.ok) {
-    throw new ReplicateError(`Replicate API error calling version ${version}: ${res.status}`);
-  }
-  const data = await res.json() as any;
-  if (data.status !== 'succeeded') {
-    throw new ReplicateError(`Replicate prediction for version ${version} did not succeed: ${data.status}`);
-  }
-  return data;
+  return handleInitialResponse(res, `version ${version}`);
 }
 
 function firstOutputUrl(data: { output: string | string[] }): string {
