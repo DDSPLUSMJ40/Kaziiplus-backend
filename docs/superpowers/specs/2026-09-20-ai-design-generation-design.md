@@ -57,17 +57,36 @@ export async function generateImage(prompt: string): Promise<Buffer>
 ```
 
 - Model: `black-forest-labs/flux-schnell` — fast (2-4s), cheap
-  (~$0.003/image), well-suited to illustration-style prompts.
+  (~$0.003/image), well-suited to illustration-style prompts. The
+  background-removal call below adds a second, smaller per-generation
+  cost on top of this — exact figure to confirm against Replicate's
+  current pricing when the token is set up, not committed to a specific
+  number here.
 - Uses Replicate's synchronous mode (`Prefer: wait` header) so the call
   resolves with a direct result instead of requiring polling or a
   webhook/job queue. If Replicate ever returns a still-processing state
   despite this header, that's treated as a failure for this pass (retry is
   the creator clicking Generate again) — no polling loop is built.
-- Downloads the resulting image URL Replicate returns and resolves with
-  the raw PNG bytes (matching what `printFileBase64` already expects on
-  the frontend/backend boundary — see §2.3).
-- Throws on any non-success response; the route handler is responsible for
-  turning that into a user-facing error, not this module.
+- **Background removal, always, no creator control.** A base text-to-image
+  model doesn't produce real alpha transparency from a prompt alone — it
+  paints something wherever the prompt implies a background, it doesn't
+  understand "transparent." A design without a transparent background
+  looks wrong on any product color other than whatever the model happened
+  to paint, so `generateImage` chains a second Replicate call (a
+  background-removal model, e.g. `851-labs/background-remover` — cheap,
+  ~1-2s) on the first call's output before returning. This isn't exposed
+  as a creator-facing choice: transparent is correct for a print file
+  essentially always, and a toggle would mostly just be a way to
+  accidentally break one's own artwork. A future pass could revisit this
+  if creators actually ask for baked-in colored backgrounds, but that's a
+  prompt-writing concern ("...with a sunset gradient background"), not a
+  transparency toggle.
+- Downloads the resulting (post-background-removal) image and resolves
+  with the raw PNG bytes (matching what `printFileBase64` already expects
+  on the frontend/backend boundary — see §2.3).
+- Throws on any non-success response from either Replicate call; the route
+  handler is responsible for turning that into a user-facing error, not
+  this module.
 
 ### 2.2 Env var
 
