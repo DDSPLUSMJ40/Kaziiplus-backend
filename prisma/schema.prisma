@@ -90,6 +90,7 @@ model CreatorProfile {
   products Product[]
   orders   Order[]
   supplierConnections SupplierConnection[]
+  aiGenerations AiGeneration[]
 
   @@map("creator_profiles")
 }
@@ -198,6 +199,16 @@ model SupplierConnection {
 
   @@unique([creatorId, provider])
   @@map("supplier_connections")
+}
+
+model AiGeneration {
+  id        String         @id @default(cuid())
+  creatorId String
+  creator   CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  prompt    String
+  createdAt DateTime       @default(now())
+
+  @@map("ai_generations")
 }
 
 // Caches a provider's catalog entry against the Kazii product it's
