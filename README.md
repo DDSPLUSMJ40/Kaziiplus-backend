@@ -1,100 +1,97 @@
-# Kazii+ Backend — Phase 1
+# Kazii+ Backend
 
-Registration and login for all three account types (Creator / Supplier /
-Manufacturer), backed by a real PostgreSQL database. This is the foundation
-everything else (products, suppliers, fulfillment) gets built on top of.
+Node.js + Express + TypeScript + Prisma + PostgreSQL, deployed on Railway
+(project `kaziiplus`, service `kazii-backend`, live at
+`https://api.kaziiplus.com`). Paired with the `kazii-frontend` repo — a
+single-file static app (`kazii-full-demo.html`) that calls this API
+directly. There is no local dev database convention documented here yet;
+every migration in this project has been run directly against the live
+Railway Postgres instance using its `DATABASE_PUBLIC_URL`.
 
-## What's actually verified vs. what still needs testing
+## What's real
 
-**Verified:** every file here type-checks as valid TypeScript — I ran `tsc`
-against all of it. The only errors it produced were "cannot find module"
-errors, which is expected since this sandbox has no network access to run
-`npm install`. Once real packages are installed, those resolve.
+Everything below is live in production, verified end-to-end against
+`https://api.kaziiplus.com` with real HTTP requests, not simulated:
 
-**Not yet verified:** I have not run this against a real database or made a
-real HTTP request to it, because I have no network access here. The first
-real test needs to happen after deployment — see the checklist at the
-bottom of this file.
+- **Auth** (`/auth`) — signup/login for three account types (Creator /
+  Supplier / Manufacturer), JWT-based, backed by a real Postgres
+  `users` table.
+- **Products** (`/products`) — creators create, update, publish, and
+  delete real products. A product can carry an uploaded or
+  AI-generated artwork layer as `printFileData`, served publicly (no
+  auth — external fulfillment providers need to fetch it) at
+  `GET /products/:id/print-file.png`.
+- **Checkout & payments** (`/`, `/webhooks`) — a creator's real
+  storefront (`GET /store/:slug`) runs a real Stripe Checkout session
+  (`POST /store/:slug/checkout`) with shipping address collection; the
+  Stripe webhook marks orders PAID/FAILED and is what triggers
+  fulfillment below.
+- **Printful fulfillment** (`/fulfillment`) — a creator connects a real
+  Printful account (API token, encrypted at rest with AES-256-GCM),
+  binds a product to a real Printful catalog variant, and a PAID order
+  automatically creates a real Printful order (draft, then confirmed).
+- **AI design generation** (`/ai`) — `POST /ai/generate-design` lets a
+  creator generate print-ready artwork from a text prompt via
+  Replicate (`black-forest-labs/flux-schnell`, then background removal
+  via `lucataco/remove-bg`), capped at 10 free generations/creator/month.
+  Polls past Replicate's own ~60s response window (up to 3 minutes) for
+  slow/cold predictions instead of failing outright. A failed
+  generation never consumes the creator's monthly quota (only
+  successful generations are counted).
+- **Creator stats** — real endpoints back the frontend workspace's
+  Overview/Products/Orders/Analytics tabs for a logged-in creator (no
+  separate "analytics" table; these are derived from real orders/products
+  at request time).
 
-## Stack
+## Not yet real
 
-Same as Vespermark's backend, on purpose — you already know how to operate
-this: Node.js, Express, TypeScript, Prisma, PostgreSQL, deployed on Railway.
+- **Supplier directory / "Match Score" matching system** — no supplier
+  directory or matching algorithm exists yet, backend or otherwise.
+  This is separate, larger scope, not a quick wiring job like
+  everything above.
+- **Gelato, CJ Dropshipping fulfillment** — only Printful is wired up;
+  the other two providers shown in the frontend's Builder rail have no
+  backend behind them yet.
+- **Social media connection** (populating real follower counts) — not
+  built.
 
-## Deploying this (step by step)
-
-### 1. Create the GitHub repo
-
-Same pattern as your other repos — create a new one, e.g.
-`DDSPLUSMJ40/kazii-backend`, and upload every file in this folder through
-GitHub's web UI (drag the whole folder onto the "Add file → Upload files"
-screen, keeping the folder structure intact — `src/`, `prisma/`, etc. need
-to stay as real subfolders, not flattened).
-
-### 2. Create the Railway project
-
-New Railway project (don't reuse Vespermark's) → add a PostgreSQL database
-service → add a second service from your new GitHub repo.
-
-### 3. Set environment variables on the backend service
-
-In Railway's service settings, add:
-
-- `DATABASE_URL` — Railway auto-populates this when you link the Postgres
-  service, you shouldn't need to type it by hand
-- `JWT_SECRET` — generate a real one, don't ship the placeholder. Easiest
-  way: in Railway's own shell/CLI or your terminal, run
-  `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`
-  and paste the output in
-- `NODE_ENV` — set to `production`
-
-### 4. Run the first migration
-
-This creates the actual tables in the database from `prisma/schema.prisma`.
-From your machine (Windows CMD), using `DATABASE_PUBLIC_URL` the same way
-you did for Vespermark:
-
-```
-set DATABASE_URL=<paste the DATABASE_PUBLIC_URL from Railway's Postgres service>
-npx prisma migrate dev --name init
-```
-
-### 5. Deploy
-
-Railway should auto-deploy on push once it's connected to the repo. Confirm
-the build command is `npm run build` and the start command is `npm start`.
-
-## Testing it's actually alive
-
-Once deployed, hit the health check first:
+## Stack & structure
 
 ```
-curl https://<your-railway-url>/health
+src/
+  controllers/    one file per resource (auth, products, checkout/storefront, fulfillment, ai)
+  adapters/       thin wrappers around external APIs (printful.adapter.ts, replicate.adapter.ts) —
+                  no framework code inside them, just the HTTP calls
+  routes/         Express routers, each mounted in index.ts
+  schemas/        Zod validation schemas, one per resource
+  middleware/      auth (requireAuth/requireAccountType), asyncHandler, error handler
+  lib/            prisma client singleton, crypto.ts (AES-256-GCM for stored API tokens)
+prisma/
+  schema.prisma   the data model
+  migrations/     applied directly against the live Railway Postgres instance
 ```
 
-Should return `{"status":"ok"}`. If that works, try a real signup:
+New work in this repo follows the `superpowers` skill workflow
+(`docs/superpowers/specs/` → `docs/superpowers/plans/`) — see those
+folders for the design history behind what's built.
+
+## Testing
 
 ```
-curl -X POST https://<your-railway-url>/auth/signup ^
-  -H "Content-Type: application/json" ^
-  -d "{\"email\":\"test@example.com\",\"password\":\"password123\",\"accountType\":\"CREATOR\",\"firstName\":\"Jade\"}"
+npm test        # Vitest — 17 files / 99 tests as of this writing, all against mocked
+                 # Prisma/adapters, no network calls
+npm run build    # tsc
 ```
 
-(Windows CMD caret line-continuation shown — same pattern as your Vespermark
-curl testing.) A successful response returns a `user` object and a `token`.
+Beyond the unit suite, every feature above has been verified with a real
+end-to-end pass against production (real signup, real Stripe test-mode
+checkout, a real — and in one case, deliberately risk-flagged — Printful
+order, a real Replicate generation) with test data cleaned up
+afterward via `prisma db execute` / a throwaway script against the live
+database.
 
-## What's next (not built yet)
+## Environment variables (set on Railway, never committed)
 
-- **Product endpoints** — the Builder currently only holds product data in
-  browser state; nothing persists. Phase 2.
-- **Supplier directory + Match Score, server-side** — currently hardcoded
-  demo data in the frontend. Phase 3.
-- **Fulfillment provider connections** (Printful/Gelato/CJ) — per
-  `docs/kazii-fulfillment-integration-spec.md` already written. Phase 4.
-  This is a different kind of registration than what's built here — see
-  that doc for why.
-- **Frontend wiring** — the existing signup forms in the frontend repo's
-  `kazii-full-demo.html` (the `screen-auth` panel) currently simulate
-  success with a toast and a redirect. They need to actually call
-  `POST /auth/signup` and store the returned token. Not done yet — flag if
-  you want that wired up next.
+`DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY` (Printful token
+encryption), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+`REPLICATE_API_TOKEN`, `NODE_ENV`, `FRONTEND_URL`.
