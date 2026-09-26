@@ -58,6 +58,16 @@ enum FulfillmentOrderStatus {
   FAILED
 }
 
+enum FormationStatus {
+  PENDING_PAYMENT
+  PAID
+  SUBMITTED
+  FILED
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
 // One row per registered account, regardless of type.
 // Type-specific fields live in the linked profile table.
 model User {
@@ -91,6 +101,7 @@ model CreatorProfile {
   orders   Order[]
   supplierConnections SupplierConnection[]
   aiGenerations AiGeneration[]
+  formationOrders FormationOrder[]
 
   @@map("creator_profiles")
 }
@@ -209,6 +220,33 @@ model AiGeneration {
   createdAt DateTime       @default(now())
 
   @@map("ai_generations")
+}
+
+model FormationOrder {
+  id                      String          @id @default(cuid())
+  creatorId               String
+  creator                 CreatorProfile  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  provider                String
+  providerOrderId         String?         @unique
+  companyName             String
+  state                   String
+  founderName             String
+  founderEmail            String
+  mailingAddress          Json
+  providerCostCents       Int
+  stateFeeCents           Int
+  markupCents             Int
+  totalCents              Int
+  stripeSessionId         String?         @unique
+  stripePaymentIntentId   String?
+  status                  FormationStatus @default(PENDING_PAYMENT)
+  ein                     String?
+  registeredAgentAssigned Boolean         @default(false)
+  failureReason           String?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  @@map("formation_orders")
 }
 
 // Caches a provider's catalog entry against the Kazii product it's
