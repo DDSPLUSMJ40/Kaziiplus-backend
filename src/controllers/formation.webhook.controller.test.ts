@@ -122,6 +122,13 @@ describe('handleFormationPaid', () => {
     });
     expect(mockStripe.refunds.create).not.toHaveBeenCalled();
   });
+
+  it('does not throw when failAndRefund itself fails (DB error on status write)', async () => {
+    mockProvider.submitFormation.mockRejectedValue(new Error('provider exploded'));
+    mockPrisma.formationOrder.update.mockRejectedValueOnce(new Error('DB down'));
+    await expect(handleFormationPaid(session())).resolves.not.toThrow();
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('failAndRefund itself failed'), expect.any(Error));
+  });
 });
 
 describe('handleFormationProviderWebhook', () => {

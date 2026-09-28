@@ -16,15 +16,19 @@ const STATUS_RANK: Partial<Record<string, number>> = {
 };
 
 async function failAndRefund(orderId: string, paymentIntentId: string | null, reason: string) {
-  await prisma.formationOrder.update({ where: { id: orderId }, data: { status: 'FAILED', failureReason: reason } });
-  if (!paymentIntentId) return;
-
   try {
-    await getStripe().refunds.create({ payment_intent: paymentIntentId });
-    await prisma.formationOrder.update({ where: { id: orderId }, data: { status: 'REFUNDED' } });
+    await prisma.formationOrder.update({ where: { id: orderId }, data: { status: 'FAILED', failureReason: reason } });
+    if (!paymentIntentId) return;
+
+    try {
+      await getStripe().refunds.create({ payment_intent: paymentIntentId });
+      await prisma.formationOrder.update({ where: { id: orderId }, data: { status: 'REFUNDED' } });
+    } catch (err) {
+      console.error(`Formation order ${orderId}: refund failed`, err);
+      await prisma.formationOrder.update({ where: { id: orderId }, data: { failureReason: `${reason}; refund_failed` } });
+    }
   } catch (err) {
-    console.error(`Formation order ${orderId}: refund failed`, err);
-    await prisma.formationOrder.update({ where: { id: orderId }, data: { failureReason: `${reason}; refund_failed` } });
+    console.error(`Formation order ${orderId}: failAndRefund itself failed — order may be stuck, needs manual review`, err);
   }
 }
 
