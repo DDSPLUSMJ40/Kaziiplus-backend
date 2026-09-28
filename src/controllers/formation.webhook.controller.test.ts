@@ -129,6 +129,31 @@ describe('handleFormationPaid', () => {
     await expect(handleFormationPaid(session())).resolves.not.toThrow();
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining('failAndRefund itself failed'), expect.any(Error));
   });
+
+  it('does not refund when submission succeeds but the SUBMITTED write fails -- order needs manual reconciliation', async () => {
+    mockPrisma.formationOrder.update.mockRejectedValueOnce(new Error('DB blip'));
+    await expect(handleFormationPaid(session())).resolves.not.toThrow();
+
+    expect(mockProvider.submitFormation).toHaveBeenCalled();
+    expect(mockPrisma.formationOrder.update).toHaveBeenCalledWith({
+      where: { id: 'fo1' },
+      data: { providerOrderId: 'mock_1', status: 'SUBMITTED' },
+    });
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('filed with provider (providerOrderId=mock_1) but the DB write recording it failed'),
+      expect.any(Error),
+    );
+
+    // failAndRefund must not have run: no refund, and no FAILED/REFUNDED write.
+    expect(mockStripe.refunds.create).not.toHaveBeenCalled();
+    expect(mockPrisma.formationOrder.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) }),
+    );
+    expect(mockPrisma.formationOrder.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'REFUNDED' }) }),
+    );
+    expect(mockPrisma.formationOrder.update).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('handleFormationProviderWebhook', () => {

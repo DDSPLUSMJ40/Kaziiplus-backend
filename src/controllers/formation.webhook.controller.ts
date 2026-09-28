@@ -64,7 +64,16 @@ export async function handleFormationPaid(session: Stripe.Checkout.Session): Pro
         zip: string;
       },
     });
-    await prisma.formationOrder.update({ where: { id: orderId }, data: { providerOrderId, status: 'SUBMITTED' } });
+    try {
+      await prisma.formationOrder.update({ where: { id: orderId }, data: { providerOrderId, status: 'SUBMITTED' } });
+    } catch (writeErr) {
+      // The provider filing already succeeded -- refunding here would be
+      // wrong. This order needs MANUAL reconciliation, not failAndRefund.
+      console.error(
+        `Formation order ${orderId}: filed with provider (providerOrderId=${providerOrderId}) but the DB write recording it failed -- order needs MANUAL reconciliation, NOT a refund`,
+        writeErr,
+      );
+    }
   } catch (err) {
     // Provider internals never reach the creator or the DB -- only a generic
     // reason. The Stripe response is unaffected: the payment already succeeded.

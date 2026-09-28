@@ -123,6 +123,7 @@ describe('createFormationCheckout', () => {
     });
     const sessionArgs = mockStripe.checkout.sessions.create.mock.calls[0][0];
     expect(sessionArgs.mode).toBe('payment');
+    expect(sessionArgs.payment_method_types).toEqual(['card']);
     expect(sessionArgs.line_items[0].price_data.unit_amount).toBe(22800);
     expect(sessionArgs.metadata).toEqual({ kind: 'formation', formationOrderId: 'fo1' });
     expect(sessionArgs.customer_email).toBe('jade@example.com');

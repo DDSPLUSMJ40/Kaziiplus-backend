@@ -85,6 +85,12 @@ export async function createFormationCheckout(req: AuthedRequest, res: Response)
 
   const session = await getStripe().checkout.sessions.create({
     mode: 'payment',
+    // Card only -- delayed-settlement methods (ACH, etc.) could fire
+    // checkout.session.completed with payment_status still 'unpaid', letting
+    // formation submit to the provider before payment actually clears. Card
+    // settles synchronously, so this is sufficient without adding
+    // async-payment webhook handling.
+    payment_method_types: ['card'],
     line_items: [
       {
         price_data: {
