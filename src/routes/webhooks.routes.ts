@@ -4,6 +4,8 @@ import { prisma } from '../lib/prisma';
 import { getStripe } from '../lib/stripe';
 import { decrypt } from '../lib/crypto';
 import { createOrder, PrintfulRecipient } from '../adapters/printful.adapter';
+import { asyncHandler } from '../middleware/asyncHandler';
+import { handleFormationPaid, handleFormationProviderWebhook } from '../controllers/formation.webhook.controller';
 
 // Public URL fulfillment providers fetch print files from -- same domain
 // the frontend's API_BASE_URL points at, hardcoded there for the same
@@ -104,6 +106,14 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
+
+    // Formation payments carry metadata.kind === 'formation' (set in
+    // formation.controller.ts); everything else is a storefront order.
+    if (session.metadata?.kind === 'formation') {
+      await handleFormationPaid(session);
+      return res.json({ received: true });
+    }
+
     const shippingAddress = extractShippingAddress(session);
 
     const order = await prisma.order.findUnique({ where: { stripeSessionId: session.id } });
@@ -121,7 +131,11 @@ export async function handleStripeWebhook(req: Request, res: Response) {
   return res.json({ received: true });
 }
 
+// Both wrapped so a Prisma/Stripe rejection reaches the global error handler
+// instead of crashing the process (see asyncHandler.ts). The /webhooks mount
+// in index.ts already applies express.raw, which both handlers need.
 const router = Router();
-router.post('/stripe', handleStripeWebhook);
+router.post('/stripe', asyncHandler(handleStripeWebhook));
+router.post('/formation', asyncHandler(handleFormationProviderWebhook));
 
 export default router;
