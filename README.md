@@ -54,6 +54,10 @@ Everything below is live in production, verified end-to-end against
   backend behind them yet.
 - **Social media connection** (populating real follower counts) — not
   built.
+- **Company formation** — built behind `FORMATION_ENABLED` (off) with a
+  mock provider; the real provider (doola) needs a partnership agreement
+  before its adapter can be written. See
+  `docs/superpowers/specs/2026-09-25-company-formation-design.md`.
 
 ## Stack & structure
 
@@ -94,4 +98,6 @@ database.
 
 `DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY` (Printful token
 encryption), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
-`REPLICATE_API_TOKEN`, `NODE_ENV`, `FRONTEND_URL`.
+`REPLICATE_API_TOKEN`, `NODE_ENV`, `FRONTEND_URL`, and (company formation)
+`FORMATION_ENABLED`, `FORMATION_PROVIDER`, `FORMATION_MARKUP_CENTS`,
+`FORMATION_WEBHOOK_SECRET`.
